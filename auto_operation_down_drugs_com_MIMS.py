@@ -3,7 +3,7 @@ import time
 import json
 import base64
 from pathlib import Path
-from typing import List, Optional
+from typing import List, Optional, Dict
 
 import pandas as pd
 from selenium import webdriver
@@ -37,19 +37,40 @@ def setup_chrome_driver(headless: bool = False) -> webdriver.Chrome:
         sys.exit(1)
 
 
-def get_drugs_com_links(excel_path: str) -> List[str]:
-    """Read Excel file and extract www.drugs.com links."""
+def get_drugs_com_links_with_ids(excel_path: str) -> List[Dict]:
+    """Read Excel file and extract www.mims.com links with their IDs."""
     try:
         df = pd.read_excel(excel_path)
         
         if 'domain' not in df.columns or 'link' not in df.columns:
             raise KeyError("Required columns 'domain' and 'link' not found in Excel file")
         
-        # Filter for www.drugs.com domain
-        drugs_links = df[df['domain'] == 'www.drugs.com']['link'].tolist()
+        # Check for ID column (could be 'id', 'ID', 'Id', or index)
+        id_column = None
+        for col in ['id', 'ID', 'Id', 'index', 'Index']:
+            if col in df.columns:
+                id_column = col
+                break
         
-        print(f"Found {len(drugs_links)} www.drugs.com links")
-        return drugs_links
+        # If no ID column found, use row index + 1
+        if id_column is None:
+            print("No ID column found, using row index as ID")
+            df['generated_id'] = range(1, len(df) + 1)
+            id_column = 'generated_id'
+        
+        # Filter for www.mims.com domain
+        mims_data = df[df['domain'] == 'www.mims.com'].copy()
+        
+        # Create list of dictionaries with id and link
+        result = []
+        for _, row in mims_data.iterrows():
+            result.append({
+                'id': row[id_column],
+                'link': row['link']
+            })
+        
+        print(f"Found {len(result)} www.mims.com links with IDs")
+        return result
         
     except Exception as e:
         print(f"Error reading Excel file: {e}")
@@ -77,6 +98,41 @@ def save_page_as_pdf(driver: webdriver.Chrome, url: str, pdf_path: str, timeout:
         
         # Additional wait for dynamic content
         time.sleep(2)
+        
+        # Hide modal elements that might interfere with PDF generation
+        try:
+            driver.execute_script("""
+                // Hide all elements with class 'jmodal'
+                var jmodals = document.querySelectorAll('.jmodal');
+                for (var i = 0; i < jmodals.length; i++) {
+                    jmodals[i].style.display = 'none';
+                    jmodals[i].style.visibility = 'hidden';
+                }
+                
+                // Hide jquery-modal elements with specific class combination
+                var jqueryModals = document.querySelectorAll('.jquery-modal.blocker.current');
+                for (var i = 0; i < jqueryModals.length; i++) {
+                    jqueryModals[i].style.display = 'none';
+                    jqueryModals[i].style.visibility = 'hidden';
+                }
+                
+                // Also hide any other jquery-modal related elements
+                var allJqueryModals = document.querySelectorAll('[class*="jquery-modal"]');
+                for (var i = 0; i < allJqueryModals.length; i++) {
+                    allJqueryModals[i].style.display = 'none';
+                    allJqueryModals[i].style.visibility = 'hidden';
+                }
+                
+                // Hide any overlay or backdrop elements commonly used with modals
+                var overlays = document.querySelectorAll('.modal-backdrop, .overlay, .modal-overlay, [class*="backdrop"], .blocker');
+                for (var i = 0; i < overlays.length; i++) {
+                    overlays[i].style.display = 'none';
+                    overlays[i].style.visibility = 'hidden';
+                }
+            """)
+            print("Hidden modal elements (jmodal, jquery-modal blocker current)")
+        except Exception as e:
+            print(f"Could not hide modal elements: {e}")
         
         # Wait for web fonts to load (if supported)
         try:
@@ -147,25 +203,6 @@ def save_page_as_pdf(driver: webdriver.Chrome, url: str, pdf_path: str, timeout:
         return False
 
 
-def create_safe_filename(url: str, title: str, index: int) -> str:
-    """Create a safe filename for PDF from URL and title."""
-    # Extract domain from URL for folder organization
-    from urllib.parse import urlparse
-    parsed = urlparse(url)
-    domain = parsed.netloc.replace('www.', '')
-    
-    # Clean title for filename (remove special characters)
-    import re
-    safe_title = re.sub(r'[^\w\s-]', '', title).strip()
-    safe_title = re.sub(r'[-\s]+', '-', safe_title)
-    
-    # Limit length and add index
-    if len(safe_title) > 50:
-        safe_title = safe_title[:50]
-    
-    filename = f"{index:03d}_{domain}_{safe_title}.pdf"
-    return filename
-
 
 def main():
     """Main function to automate browser operations for drugs.com links."""
@@ -180,23 +217,23 @@ def main():
     # Parse command line arguments
     excel_path = sys.argv[1] if len(sys.argv) > 1 else str(default_excel)
     headless = "--headless" in sys.argv
-    max_links = 10  # Increase limit since we're saving PDFs
+    max_links = 60  # Increase limit since we're saving PDFs
     
     print(f"Reading Excel file: {excel_path}")
     print(f"PDF output directory: {pdf_output_dir}")
     print(f"Headless mode: {headless}")
     
-    # Get drugs.com links
-    drugs_links = get_drugs_com_links(excel_path)
+    # Get drugs.com links with IDs
+    drugs_data = get_drugs_com_links_with_ids(excel_path)
     
-    if not drugs_links:
-        print("No www.drugs.com links found. Exiting.")
+    if not drugs_data:
+        print("No www.mims.com links found. Exiting.")
         return
     
     # Limit number of links to process
-    if len(drugs_links) > max_links:
-        print(f"Processing first {max_links} links out of {len(drugs_links)} total")
-        drugs_links = drugs_links[:max_links]
+    if len(drugs_data) > max_links:
+        print(f"Processing first {max_links} links out of {len(drugs_data)} total")
+        drugs_data = drugs_data[:max_links]
     
     # Setup browser
     print("Setting up Chrome driver...")
@@ -206,22 +243,17 @@ def main():
     failed_downloads = 0
     
     try:
-        for i, link in enumerate(drugs_links, 1):
-            print(f"\nProcessing link {i}/{len(drugs_links)}")
+        for i, data in enumerate(drugs_data, 1):
+            print(f"\nProcessing link {i}/{len(drugs_data)}")
             
-            # First load the page to get title
-            try:
-                driver.get(link)
-                WebDriverWait(driver, 10).until(
-                    EC.presence_of_element_located((By.TAG_NAME, "body"))
-                )
-                page_title = driver.title or "Unknown_Title"
-            except:
-                page_title = "Unknown_Title"
+            link = data['link']
+            link_id = data['id']
             
-            # Create safe filename
-            filename = create_safe_filename(link, page_title, i)
+            # Create filename using ID
+            filename = f"{link_id}.pdf"
             pdf_path = pdf_output_dir / filename
+            
+            print(f"ID: {link_id}, Link: {link}")
             
             # Save page as PDF
             if save_page_as_pdf(driver, link, str(pdf_path)):
@@ -232,7 +264,7 @@ def main():
                 print(f"✗ Failed to save: {filename}")
             
             # Add delay between requests to be respectful
-            if i < len(drugs_links):
+            if i < len(drugs_data):
                 print("Waiting 3 seconds before next request...")
                 time.sleep(3)
     

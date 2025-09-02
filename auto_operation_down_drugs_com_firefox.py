@@ -54,8 +54,8 @@ def setup_firefox_driver(headless: bool = False, download_dir: str = None) -> we
         sys.exit(1)
 
 
-def get_drugs_com_links_with_ids(excel_path: str) -> List[Dict]:
-    """Read Excel file and extract www.drugs.com links with their IDs."""
+def get_mims_com_links_with_ids(excel_path: str) -> List[Dict]:
+    """Read Excel file and extract www.mims.com links with their IDs."""
     try:
         df = pd.read_excel(excel_path)
         
@@ -75,18 +75,18 @@ def get_drugs_com_links_with_ids(excel_path: str) -> List[Dict]:
             df['generated_id'] = range(1, len(df) + 1)
             id_column = 'generated_id'
         
-        # Filter for www.drugs.com domain
-        drugs_data = df[df['domain'] == 'www.drugs.com'].copy()
+        # Filter for mims.com domain
+        mims_data = df[df['domain'] == 'www.mims.com'].copy()
         
         # Create list of dictionaries with id and link
         result = []
-        for _, row in drugs_data.iterrows():
+        for _, row in mims_data.iterrows():
             result.append({
                 'id': row[id_column],
                 'link': row['link']
             })
         
-        print(f"Found {len(result)} www.drugs.com links with IDs")
+        print(f"Found {len(result)} www.mims.com links with IDs")
         return result
         
     except Exception as e:
@@ -368,13 +368,13 @@ def alternative_pdf_save_method(driver: webdriver.Firefox, pdf_path: str) -> boo
 
 
 def main():
-    """Main function to automate browser operations for drugs.com links using Firefox."""
+    """Main function to automate browser operations for mims.com links using Firefox."""
     # Default paths
     workspace_dir = Path(__file__).resolve().parent
     default_excel = workspace_dir / "aitep_references_need_fulltext_with_domain.xlsx"
     
     # Create PDF output directories
-    pdf_output_dir = workspace_dir / "drugs_com_pdfs_mozilla_renamed"
+    pdf_output_dir = workspace_dir / "mims_com_pdfs_mozilla_renamed"
     pdf_output_dir.mkdir(exist_ok=True)
     
     # Parse command line arguments
@@ -384,23 +384,23 @@ def main():
     args_without_headless = [arg for arg in sys.argv[1:] if arg != "--headless"]
     excel_path = args_without_headless[0] if args_without_headless else str(default_excel)
     
-    max_links = 103  # Process up to 103 links
+    max_links = 60  # Process up to 103 links
     
     print(f"Reading Excel file: {excel_path}")
     print(f"PDF output directory: {pdf_output_dir}")
     print(f"Headless mode: {headless}")
     
-    # Get drugs.com links with IDs
-    drugs_data = get_drugs_com_links_with_ids(excel_path)
+    # Get mims.com links with IDs
+    mims_data = get_mims_com_links_with_ids(excel_path)
     
-    if not drugs_data:
-        print("No www.drugs.com links found. Exiting.")
+    if not mims_data:
+        print("No www.mims.com links found. Exiting.")
         return
     
     # Limit number of links to process
-    if len(drugs_data) > max_links:
-        print(f"Processing first {max_links} links out of {len(drugs_data)} total")
-        drugs_data = drugs_data[:max_links]
+    if len(mims_data) > max_links:
+        print(f"Processing first {max_links} links out of {len(mims_data)} total")
+        mims_data = mims_data[:max_links]
     
     # Setup browser with workspace as download directory
     print("Setting up Firefox driver...")
@@ -410,11 +410,11 @@ def main():
     failed_downloads = 0
     
     try:
-        for i, data in enumerate(drugs_data, 1):
+        for i, data in enumerate(mims_data, 1):
             record_id = data['id']
             link = data['link']
             
-            print(f"\nProcessing link {i}/{len(drugs_data)} (ID: {record_id})")
+            print(f"\nProcessing link {i}/{len(mims_data)} (ID: {record_id})")
             
             # Navigate to the page and wait for load
             try:
@@ -473,7 +473,7 @@ def main():
                 failed_downloads += 1
             
             # Add delay between requests
-            if i < len(drugs_data):
+            if i < len(mims_data):
                 print("Waiting 3 seconds before next request...")
                 time.sleep(3)
     
