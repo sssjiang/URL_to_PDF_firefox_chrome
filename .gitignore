@@ -1,0 +1,8 @@
+/drugs_com_pdfs
+/drugs_com_pdfs_firefox
+~$*.xlsx
+/drugs_com_pdfs_mozilla_renamed
+/test_pdf_output
+/.venv
+/__pycache__/
+
