@@ -10,20 +10,29 @@ from typing import Dict, Any, Optional
 
 
 class ToxicologicalExtractor:
-    def __init__(self, html_file_path: str):
-        """Initialize with HTML file path."""
+    def __init__(self, html_file_path: str = None, html_content: str = None):
+        """Initialize with HTML file path or HTML content."""
         self.html_file_path = html_file_path
+        self.html_content = html_content
         self.soup = None
         self.load_html()
     
     def load_html(self):
-        """Load and parse HTML file."""
+        """Load and parse HTML from file or content."""
         try:
-            with open(self.html_file_path, 'r', encoding='utf-8') as f:
-                content = f.read()
+            if self.html_content:
+                # 直接使用提供的HTML内容
+                content = self.html_content
+            elif self.html_file_path:
+                # 从文件读取HTML内容
+                with open(self.html_file_path, 'r', encoding='utf-8') as f:
+                    content = f.read()
+            else:
+                raise ValueError("必须提供html_file_path或html_content参数")
+            
             self.soup = BeautifulSoup(content, 'html.parser')
         except Exception as e:
-            print(f"Error loading HTML file: {e}")
+            print(f"Error loading HTML: {e}")
             raise
     
     def extract_toxicological_structure(self) -> Dict[str, Any]:

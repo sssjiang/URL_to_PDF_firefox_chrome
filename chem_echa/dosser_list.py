@@ -59,12 +59,12 @@ headers = {
     # 'Cookie': 'legalNotice=%7B%22accepted%22%3Atrue%2C%22expired%22%3Afalse%2C%22acceptedDate%22%3A1756802272182%7D; cck1=%7B%22cm%22%3Atrue%2C%22all1st%22%3Atrue%7D; _pk_ses.b1c62efe-8fd0-4b63-a615-30d86a21a01e.f839=*; _pk_id.b1c62efe-8fd0-4b63-a615-30d86a21a01e.f839=afbddb297a39ebfa.1756802275.1.1756976436.1756971630.',
 }
 
-def get_dosser_asset_external_id(rml_id='100.036.124', verbose=False):
+def get_dosser_asset_external_id(rml_id, verbose=False):
     """
     获取dosser的assetExternalId
     
     Args:
-        rml_id (str): RML ID，默认为 '100.036.124'
+        rml_id (str): RML ID
         verbose (bool): 是否打印详细信息，默认为 False
     
     Returns:

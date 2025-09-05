@@ -73,12 +73,12 @@ class ECHADataPipeline:
                 return pipeline_result
             
             # 步骤3: 获取dosser详情页面
-            dosser_html_file = self._step3_get_dosser_detail(asset_external_id, pipeline_result)
-            if not dosser_html_file:
+            html_content = self._step3_get_dosser_detail(asset_external_id, pipeline_result)
+            if not html_content:
                 return pipeline_result
             
             # 步骤4: 提取毒理学信息结构
-            asset_external_id = self._step4_extract_toxicological_structure(dosser_html_file, extract_output_file, pipeline_result)
+            asset_external_id = self._step4_extract_toxicological_structure(html_content, extract_output_file, pipeline_result)
             if not asset_external_id:
                 return pipeline_result
             
@@ -148,7 +148,7 @@ class ECHADataPipeline:
         
         dosser_detail_result = get_dosser_detail_html(
             asset_external_id=asset_external_id,
-            save_to_file=self.save_files,
+            save_to_file=False,  # 中间过程不保存文件
             verbose=self.verbose
         )
         pipeline_result['step3_dosser_detail'] = dosser_detail_result
@@ -160,25 +160,22 @@ class ECHADataPipeline:
             return None
         
         html_content = dosser_detail_result.get('html_content')
-        saved_file = dosser_detail_result.get('saved_file')
         
         if self.verbose:
             print(f"✅ 步骤3成功: 获取HTML内容 ({len(html_content)} 字符)")
-            if saved_file:
-                print(f"   保存文件: {saved_file}")
             print()
         
-        # 返回保存的文件路径，用于下一步的毒理学结构提取
-        return saved_file if saved_file else None
+        # 返回HTML内容给下一步使用
+        return html_content
     
-    def _step4_extract_toxicological_structure(self, html_file_path: str, output_file: str, pipeline_result: Dict) -> Optional[str]:
+    def _step4_extract_toxicological_structure(self, html_content: str, output_file: str, pipeline_result: Dict) -> Optional[str]:
         """步骤4: 提取毒理学信息结构"""
         if self.verbose:
             print("步骤4: 提取毒理学信息结构...")
         
         try:
-            # 创建毒理学提取器实例
-            extractor = ToxicologicalExtractor(html_file_path)
+            # 直接使用HTML内容创建毒理学提取器实例
+            extractor = ToxicologicalExtractor(html_content=html_content)
             
             # 提取毒理学结构
             structure = extractor.extract_toxicological_structure()
@@ -190,12 +187,8 @@ class ECHADataPipeline:
                     search_text_safe = "".join(c for c in pipeline_result['search_text'] if c.isalnum() or c in '-_')[:20]
                     output_file = f"toxicological_structure_{search_text_safe}_{timestamp}.json"
                 
-                # 保存结构到JSON文件
-                if self.save_files:
-                    extractor.save_to_json(output_file, structure)
-                    saved_file = os.path.abspath(output_file)
-                else:
-                    saved_file = None
+                # 中间过程不保存文件
+                saved_file = None
                 
                 # 记录结果
                 pipeline_result['step4_toxicological_structure'] = {
@@ -207,10 +200,6 @@ class ECHADataPipeline:
                 
                 if self.verbose:
                     print(f"✅ 步骤4成功: 提取到 {len(structure)} 个主要部分")
-                    if saved_file:
-                        print(f"   保存文件: {saved_file}")
-                    
-                    # 打印结构概览
                     print("   提取的结构概览:")
                     extractor.print_structure(structure)
                     print()
@@ -396,7 +385,7 @@ def main():
     pipeline = ECHADataPipeline(verbose=True, save_files=True)
     
     # 示例1: 搜索CAS号
-    search_text = "15676-16-1"
+    search_text = "65-45-2"
     
     # 可选：指定毒理学结构提取结果的输出文件名
     extract_output_file = None  # 如果为None，将自动生成文件名
